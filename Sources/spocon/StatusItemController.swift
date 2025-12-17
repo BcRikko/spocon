@@ -93,9 +93,9 @@ end tell
         guard var s = String(data: data, encoding: .utf8) else { return }
         s = s.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.isEmpty {
-            // clear display when not playing
+            // show placeholder when Spotify not running or not playing
             DispatchQueue.main.async { [weak self] in
-                self?.setText("", maxWidth: nil)
+                self?.setText("loading...", maxWidth: nil)
             }
             return
         }
