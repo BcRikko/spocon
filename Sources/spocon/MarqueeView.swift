@@ -11,7 +11,7 @@ final class MarqueeView: NSView {
     }()
 
     private var textWidth: CGFloat = 0
-    private var speedPointsPerSecond: CGFloat = 80
+    private var speedPointsPerSecond: CGFloat = 30
     private var startDelay: TimeInterval = 1.0
     private var endDelay: TimeInterval = 2.0
     private let animKey = "marquee.translation"
@@ -91,9 +91,9 @@ final class MarqueeView: NSView {
         let anim = CABasicAnimation(keyPath: "transform.translation.x")
         anim.fromValue = 0
         anim.toValue = -distance
-        anim.duration = duration
+        anim.duration = duration - 1.5
         anim.timingFunction = CAMediaTimingFunction(name: .linear)
-        anim.fillMode = .forwards
+        anim.fillMode = .both
         anim.isRemovedOnCompletion = false
         layer.add(anim, forKey: animKey)
 
@@ -111,7 +111,7 @@ final class MarqueeView: NSView {
         }
 
         restartWorkItem = reload
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration + endDelay, execute: reload)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration + self.endDelay, execute: reload)
     }
 
     override func layout() {

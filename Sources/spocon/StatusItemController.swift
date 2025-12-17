@@ -9,21 +9,25 @@ public struct NowPlaying {
     }
 }
 
-final class StatusItemController: NSObject {
+final class StatusItemController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var marqueeView: MarqueeView?
     private var maxWidthPoints: CGFloat = 180
     private var spotifyTimer: DispatchSourceTimer?
+    private var currentTitle: String = ""
+    private var currentArtist: String = ""
 
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
+        // let the system display the menu; update its contents just before it opens
         if let button = statusItem.button {
-            button.action = #selector(buttonClicked(_:))
             button.target = self
         }
 
-        statusItem.menu = makeMenu()
+        let menu = makeMenu()
+        menu.delegate = self
+        statusItem.menu = menu
 
         setText("initializing...", maxWidth: nil)
         startSpotifyUpdates()
@@ -110,6 +114,8 @@ end tell
     }
 
     func setNowPlaying(music: String, artist: String, maxWidth: CGFloat? = nil) {
+        currentTitle = music
+        currentArtist = artist
         let formatted = "♪ \(music) / \(artist)"
         setText(formatted, maxWidth: maxWidth)
     }
@@ -127,12 +133,55 @@ end tell
     @objc private func buttonClicked(_ sender: Any?) {}
     @objc private func quit(_ sender: Any?) { NSApp.terminate(nil) }
 
+    // MARK: - Menu delegate
+    func menuWillOpen(_ menu: NSMenu) {
+        // find title / artist items by tag and update their titles
+        if let titleItem = menu.item(withTag: 1) {
+            titleItem.title = "♪ " + (currentTitle.isEmpty ? "(no title)" : currentTitle)
+            titleItem.isEnabled = !currentTitle.isEmpty
+        }
+        if let artistItem = menu.item(withTag: 2) {
+            artistItem.title = "● " + (currentArtist.isEmpty ? "(no artist)" : currentArtist)
+            artistItem.isEnabled = !currentArtist.isEmpty
+        }
+    }
+
+    @objc private func copyTitle(_ sender: Any?) {
+        guard !currentTitle.isEmpty else { return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(currentTitle, forType: .string)
+    }
+
+    @objc private func copyArtist(_ sender: Any?) {
+        guard !currentArtist.isEmpty else { return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(currentArtist, forType: .string)
+    }
+
     // MARK: - Helpers
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
+
+        let titleItem = NSMenuItem(title: "♪ (no title)", action: #selector(copyTitle(_:)), keyEquivalent: "")
+        titleItem.tag = 1
+        titleItem.target = self
+        titleItem.isEnabled = false
+        menu.addItem(titleItem)
+
+        let artistItem = NSMenuItem(title: "● (no artist)", action: #selector(copyArtist(_:)), keyEquivalent: "")
+        artistItem.tag = 2
+        artistItem.target = self
+        artistItem.isEnabled = false
+        menu.addItem(artistItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let quitItem = NSMenuItem(title: "Quit", action: #selector(quit(_:)), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
+
         return menu
     }
 
