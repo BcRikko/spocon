@@ -15,6 +15,7 @@ final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem!
     private var marqueeView: MarqueeView?
     private var maxWidthPoints: CGFloat = 200
+    private var spotifyTimer: DispatchSourceTimer?
 
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -29,6 +30,81 @@ final class StatusItemController: NSObject {
         statusItem.menu = menu
 
         setText("♪ 曲名-------------------------/------------------アーティスト", maxWidth: nil)
+
+        // start polling Spotify for now-playing info
+        startSpotifyUpdates()
+    }
+
+    // MARK: - Spotify integration
+    /// Start periodic polling of Spotify (every `interval` seconds)
+    func startSpotifyUpdates(interval: TimeInterval = 2.0) {
+        stopSpotifyUpdates()
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .background))
+        timer.schedule(deadline: .now() + 0.5, repeating: interval)
+        timer.setEventHandler { [weak self] in
+            self?.fetchSpotifyNowPlaying()
+        }
+        timer.resume()
+        spotifyTimer = timer
+    }
+
+    func stopSpotifyUpdates() {
+        spotifyTimer?.cancel()
+        spotifyTimer = nil
+    }
+
+    private func fetchSpotifyNowPlaying() {
+        // AppleScript: return "title||artist" or empty string
+        let script = #"""
+tell application "System Events"
+    set isRunning to (exists (processes where name is "Spotify"))
+end tell
+if not isRunning then
+    return ""
+end if
+tell application "Spotify"
+    if player state is playing then
+        set t to name of current track
+        set a to artist of current track
+        return t & "||" & a
+    else
+        return ""
+    end if
+end tell
+"""#
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        proc.arguments = ["-e", script]
+        let outPipe = Pipe()
+        proc.standardOutput = outPipe
+        proc.standardError = Pipe()
+
+        do {
+            try proc.run()
+        } catch {
+            return
+        }
+        proc.waitUntilExit()
+
+        let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+        guard var s = String(data: data, encoding: .utf8) else { return }
+        s = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.isEmpty {
+            // clear display when not playing
+            DispatchQueue.main.async { [weak self] in
+                self?.setText("", maxWidth: nil)
+            }
+            return
+        }
+
+        let parts = s.components(separatedBy: "||")
+        let title = parts.first ?? ""
+        let artist = parts.dropFirst().first ?? ""
+
+        DispatchQueue.main.async { [weak self] in
+            self?.setNowPlaying(music: title, artist: artist, maxWidth: nil)
+        }
     }
 
     func setText(_ text: String, maxWidth: CGFloat?) {
