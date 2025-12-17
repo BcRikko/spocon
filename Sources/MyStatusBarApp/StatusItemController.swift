@@ -1,6 +1,16 @@
 import Cocoa
 
-/// Clean single-definition StatusItemController + MarqueeView
+/// Simple container for now-playing info
+public struct NowPlaying {
+    public let music: String
+    public let artist: String
+    public init(music: String, artist: String) {
+        self.music = music
+        self.artist = artist
+    }
+}
+
+/// Clean single-definition StatusItemController
 final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem!
     private var marqueeView: MarqueeView?
@@ -36,6 +46,24 @@ final class StatusItemController: NSObject {
         }
 
         marqueeView?.setText(text, containerWidth: maxWidthPoints, font: button.font)
+    }
+
+    /// Set now-playing info using separate fields
+    func setNowPlaying(music: String, artist: String, maxWidth: CGFloat? = nil) {
+        let formatted = "♪ \(music) / \(artist)"
+        setText(formatted, maxWidth: maxWidth)
+    }
+
+    /// Set now-playing info using `NowPlaying` struct
+    func setNowPlaying(_ info: NowPlaying, maxWidth: CGFloat? = nil) {
+        setNowPlaying(music: info.music, artist: info.artist, maxWidth: maxWidth)
+    }
+
+    /// Set now-playing info from a dictionary-like payload (e.g. {"music":"...","artist":"..."})
+    func setNowPlaying(from dict: [String: String], maxWidth: CGFloat? = nil) {
+        let music = dict["music"] ?? ""
+        let artist = dict["artist"] ?? ""
+        setNowPlaying(music: music, artist: artist, maxWidth: maxWidth)
     }
 
     @objc private func buttonClicked(_ sender: Any?) {}
