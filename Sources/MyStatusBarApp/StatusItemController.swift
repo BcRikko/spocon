@@ -93,7 +93,8 @@ final class MarqueeView: NSView {
 
     private func startSmoothMarquee() {
         guard textWidth > containerWidth, let layer = label.layer else { return }
-        let distance = textWidth + gap
+        // distance needed so the label's right edge aligns with the container's right edge
+        let distance = textWidth - containerWidth
         let duration = TimeInterval(distance / speedPointsPerSecond)
 
         layer.setAffineTransform(.identity)
@@ -102,9 +103,13 @@ final class MarqueeView: NSView {
         CATransaction.setAnimationDuration(duration)
         CATransaction.setCompletionBlock { [weak self] in
             guard let self = self else { return }
+            // When animation completes, keep the end visible for `endDelay`,
+            // then reset to the start and (after startDelay) begin again.
             DispatchQueue.main.asyncAfter(deadline: .now() + self.endDelay) {
                 layer.removeAllAnimations()
+                // snap back to the start
                 layer.setAffineTransform(.identity)
+                // optionally wait startDelay before next scroll
                 DispatchQueue.main.asyncAfter(deadline: .now() + self.startDelay) {
                     self.startSmoothMarquee()
                 }
