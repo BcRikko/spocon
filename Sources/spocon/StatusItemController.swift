@@ -26,7 +26,9 @@ final class StatusItemController: NSObject {
         }
 
         let menu = NSMenu()
-        menu.addItem(withTitle: "Quit", action: #selector(quit(_:)), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit(_:)), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
         statusItem.menu = menu
 
         setText("♪ 曲名-------------------------/------------------アーティスト", maxWidth: nil)
