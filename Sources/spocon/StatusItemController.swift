@@ -1,6 +1,5 @@
 import Cocoa
 
-/// Simple container for now-playing info
 public struct NowPlaying {
     public let music: String
     public let artist: String
@@ -10,7 +9,6 @@ public struct NowPlaying {
     }
 }
 
-/// Clean single-definition StatusItemController
 final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem!
     private var marqueeView: MarqueeView?
@@ -25,27 +23,18 @@ final class StatusItemController: NSObject {
             button.target = self
         }
 
-        let menu = NSMenu()
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit(_:)), keyEquivalent: "q")
-        quitItem.target = self
-        menu.addItem(quitItem)
-        statusItem.menu = menu
+        statusItem.menu = makeMenu()
 
-        setText("♪ 曲名-------------------------/------------------アーティスト", maxWidth: nil)
-
-        // start polling Spotify for now-playing info
+        setText("initializing...", maxWidth: nil)
         startSpotifyUpdates()
     }
 
-    // MARK: - Spotify integration
-    /// Start periodic polling of Spotify (every `interval` seconds)
+    // MARK: - Spotify polling
     func startSpotifyUpdates(interval: TimeInterval = 2.0) {
         stopSpotifyUpdates()
         let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .background))
         timer.schedule(deadline: .now() + 0.5, repeating: interval)
-        timer.setEventHandler { [weak self] in
-            self?.fetchSpotifyNowPlaying()
-        }
+        timer.setEventHandler { [weak self] in self?.fetchSpotifyNowPlaying() }
         timer.resume()
         spotifyTimer = timer
     }
@@ -56,7 +45,6 @@ final class StatusItemController: NSObject {
     }
 
     private func fetchSpotifyNowPlaying() {
-        // AppleScript: return "title||artist" or empty string
         let script = #"""
 tell application "System Events"
     set isRunning to (exists (processes where name is "Spotify"))
@@ -82,21 +70,14 @@ end tell
         proc.standardOutput = outPipe
         proc.standardError = Pipe()
 
-        do {
-            try proc.run()
-        } catch {
-            return
-        }
+        do { try proc.run() } catch { return }
         proc.waitUntilExit()
 
         let data = outPipe.fileHandleForReading.readDataToEndOfFile()
         guard var s = String(data: data, encoding: .utf8) else { return }
         s = s.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.isEmpty {
-            // show placeholder when Spotify not running or not playing
-            DispatchQueue.main.async { [weak self] in
-                self?.setText("loading...", maxWidth: nil)
-            }
+            DispatchQueue.main.async { [weak self] in self?.setText("loading...", maxWidth: nil) }
             return
         }
 
@@ -109,18 +90,12 @@ end tell
         }
     }
 
+    // MARK: - UI
     func setText(_ text: String, maxWidth: CGFloat?) {
         if let mw = maxWidth { maxWidthPoints = mw }
         guard let button = statusItem.button else { return }
 
-        // compute measured text width
-        let attrs: [NSAttributedString.Key: Any] = [.font: button.font as Any]
-        let measuredTextWidth = NSString(string: text).size(withAttributes: attrs).width
-
-        // desired display width: shrink to text width if smaller, otherwise cap at maxWidthPoints
-        let padding: CGFloat = 8
-        let desiredWidth = min(maxWidthPoints, max(30, measuredTextWidth + padding))
-
+        let desiredWidth = computeDesiredWidth(text: text, font: button.font, padding: 8)
         statusItem.length = desiredWidth
 
         if marqueeView == nil {
@@ -134,18 +109,15 @@ end tell
         marqueeView?.setText(text, containerWidth: desiredWidth, font: button.font)
     }
 
-    /// Set now-playing info using separate fields
     func setNowPlaying(music: String, artist: String, maxWidth: CGFloat? = nil) {
         let formatted = "♪ \(music) / \(artist)"
         setText(formatted, maxWidth: maxWidth)
     }
 
-    /// Set now-playing info using `NowPlaying` struct
     func setNowPlaying(_ info: NowPlaying, maxWidth: CGFloat? = nil) {
         setNowPlaying(music: info.music, artist: info.artist, maxWidth: maxWidth)
     }
 
-    /// Set now-playing info from a dictionary-like payload (e.g. {"music":"...","artist":"..."})
     func setNowPlaying(from dict: [String: String], maxWidth: CGFloat? = nil) {
         let music = dict["music"] ?? ""
         let artist = dict["artist"] ?? ""
@@ -154,4 +126,19 @@ end tell
 
     @objc private func buttonClicked(_ sender: Any?) {}
     @objc private func quit(_ sender: Any?) { NSApp.terminate(nil) }
+
+    // MARK: - Helpers
+    private func makeMenu() -> NSMenu {
+        let menu = NSMenu()
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit(_:)), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+        return menu
+    }
+
+    private func computeDesiredWidth(text: String, font: NSFont?, padding: CGFloat) -> CGFloat {
+        let attrs: [NSAttributedString.Key: Any] = [.font: font as Any]
+        let measuredTextWidth = NSString(string: text).size(withAttributes: attrs).width
+        return min(maxWidthPoints, max(30, measuredTextWidth + padding))
+    }
 }
