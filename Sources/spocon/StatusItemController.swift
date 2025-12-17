@@ -14,7 +14,7 @@ public struct NowPlaying {
 final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem!
     private var marqueeView: MarqueeView?
-    private var maxWidthPoints: CGFloat = 200
+    private var maxWidthPoints: CGFloat = 180
     private var spotifyTimer: DispatchSourceTimer?
 
     func setup() {
@@ -113,17 +113,25 @@ end tell
         if let mw = maxWidth { maxWidthPoints = mw }
         guard let button = statusItem.button else { return }
 
-        statusItem.length = maxWidthPoints
+        // compute measured text width
+        let attrs: [NSAttributedString.Key: Any] = [.font: button.font as Any]
+        let measuredTextWidth = NSString(string: text).size(withAttributes: attrs).width
+
+        // desired display width: shrink to text width if smaller, otherwise cap at maxWidthPoints
+        let padding: CGFloat = 8
+        let desiredWidth = min(maxWidthPoints, max(30, measuredTextWidth + padding))
+
+        statusItem.length = desiredWidth
 
         if marqueeView == nil {
-            marqueeView = MarqueeView(frame: NSRect(x: 0, y: 0, width: maxWidthPoints, height: button.bounds.height))
+            marqueeView = MarqueeView(frame: NSRect(x: 0, y: 0, width: desiredWidth, height: button.bounds.height))
             marqueeView?.autoresizingMask = [.height]
             button.addSubview(marqueeView!)
         } else {
-            marqueeView?.frame = NSRect(x: 0, y: 0, width: maxWidthPoints, height: button.bounds.height)
+            marqueeView?.frame = NSRect(x: 0, y: 0, width: desiredWidth, height: button.bounds.height)
         }
 
-        marqueeView?.setText(text, containerWidth: maxWidthPoints, font: button.font)
+        marqueeView?.setText(text, containerWidth: desiredWidth, font: button.font)
     }
 
     /// Set now-playing info using separate fields
