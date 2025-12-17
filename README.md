@@ -1,4 +1,4 @@
-# MyStatusBarApp (minimal macOS menu bar app)
+# spocon (minimal macOS menu bar app)
 
 Minimal scaffold: Swift Package that creates a macOS status bar (menu bar) app using AppKit.
 
