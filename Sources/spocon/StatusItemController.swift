@@ -16,6 +16,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var spotifyTimer: DispatchSourceTimer?
     private var currentTitle: String = ""
     private var currentArtist: String = ""
+    private var currentIsPlaying: Bool = false
+    private var accumulatedPlaySeconds: TimeInterval = 0
+    private var lastPollDate: Date?
+    private let autoSkipSeconds: TimeInterval = 100
+    private var isAutoSkipEnabled: Bool = false
 
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -57,13 +62,13 @@ if not isRunning then
     return ""
 end if
 tell application "Spotify"
-    if player state is playing then
-        set t to name of current track
-        set a to artist of current track
-        return t & "||" & a
-    else
-        return ""
+    set state to player state as string
+    if state is "stopped" then
+        return state & "||||"
     end if
+    set t to name of current track
+    set a to artist of current track
+    return state & "||" & t & "||" & a
 end tell
 """#
 
@@ -81,17 +86,65 @@ end tell
         guard var s = String(data: data, encoding: .utf8) else { return }
         s = s.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.isEmpty {
-            DispatchQueue.main.async { [weak self] in self?.setText("loading...", maxWidth: nil) }
+            DispatchQueue.main.async { [weak self] in
+                self?.handleSpotifyUpdate(state: "", title: "", artist: "")
+            }
             return
         }
 
         let parts = s.components(separatedBy: "||")
-        let title = parts.first ?? ""
-        let artist = parts.dropFirst().first ?? ""
+        let state = parts.first ?? ""
+        let title = parts.dropFirst().first ?? ""
+        let artist = parts.dropFirst(2).first ?? ""
 
         DispatchQueue.main.async { [weak self] in
-            self?.setNowPlaying(music: title, artist: artist, maxWidth: nil)
+            self?.handleSpotifyUpdate(state: state, title: title, artist: artist)
         }
+    }
+
+    private func handleSpotifyUpdate(state: String, title: String, artist: String) {
+        let isPlaying = (state == "playing")
+        let now = Date()
+        if let last = lastPollDate, isPlaying, !title.isEmpty {
+            accumulatedPlaySeconds += now.timeIntervalSince(last)
+        }
+
+        let trackChanged = (title != currentTitle) || (artist != currentArtist)
+        if trackChanged {
+            accumulatedPlaySeconds = 0
+        }
+
+        lastPollDate = now
+        currentIsPlaying = isPlaying
+
+        if title.isEmpty {
+            setText("loading...", maxWidth: nil)
+            return
+        }
+
+        setNowPlaying(music: title, artist: artist, maxWidth: nil)
+
+        if isAutoSkipEnabled, currentIsPlaying, accumulatedPlaySeconds >= autoSkipSeconds {
+            sendSpotifyNextTrack()
+            accumulatedPlaySeconds = 0
+        }
+    }
+
+    private func sendSpotifyNextTrack() {
+        let script = #"""
+tell application "Spotify"
+    next track
+end tell
+"""#
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        proc.arguments = ["-e", script]
+        proc.standardOutput = Pipe()
+        proc.standardError = Pipe()
+
+        do { try proc.run() } catch { return }
+        proc.waitUntilExit()
     }
 
     // MARK: - UI
@@ -144,6 +197,16 @@ end tell
             artistItem.title = "● " + (currentArtist.isEmpty ? "(no artist)" : currentArtist)
             artistItem.isEnabled = !currentArtist.isEmpty
         }
+        if let autoSkipItem = menu.item(withTag: 3) {
+            autoSkipItem.state = isAutoSkipEnabled ? .on : .off
+        }
+    }
+
+    @objc private func toggleAutoSkip(_ sender: Any?) {
+        isAutoSkipEnabled.toggle()
+        if let item = sender as? NSMenuItem {
+            item.state = isAutoSkipEnabled ? .on : .off
+        }
     }
 
     @objc private func copyTitle(_ sender: Any?) {
@@ -175,6 +238,14 @@ end tell
         artistItem.target = self
         artistItem.isEnabled = false
         menu.addItem(artistItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let autoSkipItem = NSMenuItem(title: "Auto Skip (100s)", action: #selector(toggleAutoSkip(_:)), keyEquivalent: "")
+        autoSkipItem.tag = 3
+        autoSkipItem.target = self
+        autoSkipItem.state = isAutoSkipEnabled ? .on : .off
+        menu.addItem(autoSkipItem)
 
         menu.addItem(NSMenuItem.separator())
 
