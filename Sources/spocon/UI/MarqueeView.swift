@@ -6,10 +6,11 @@ final class MarqueeView: NSView {
         textField.isBezeled = false
         textField.isEditable = false
         textField.drawsBackground = false
+        textField.textColor = .labelColor
+        textField.wantsLayer = true
         return textField
     }()
 
-    private var textWidth: CGFloat = 0
     private var startWorkItem: DispatchWorkItem?
     private var restartWorkItem: DispatchWorkItem?
 
@@ -30,21 +31,20 @@ final class MarqueeView: NSView {
         let resolvedFont = font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
         label.font = resolvedFont
         label.stringValue = text
-        textWidth = measureTextWidth(text, font: resolvedFont)
+        label.sizeToFit()
 
         let height = bounds.height
-        let labelHeight = label.intrinsicContentSize.height
-        let epsilon: CGFloat = 1.0
+        let labelHeight = label.frame.height
         label.frame = NSRect(
             x: 0,
             y: max(0, (height - labelHeight) / 2),
-            width: textWidth + epsilon,
+            width: label.frame.width,
             height: labelHeight
         )
 
         resetTransform()
 
-        guard textWidth > containerWidth else {
+        guard label.frame.width > containerWidth else {
             label.frame.origin.x = 0
             return
         }
@@ -75,14 +75,13 @@ final class MarqueeView: NSView {
 
     private func startMarqueeIfNeeded(containerWidth: CGFloat) {
         layoutSubtreeIfNeeded()
-        let visibleWidth = bounds.width
         guard let layer = label.layer else { return }
 
         let labelWidth = label.frame.width
-        let distance = labelWidth - visibleWidth
+        let distance = labelWidth - containerWidth
         guard distance > 0 else { return }
 
-        let duration = max(0.5, TimeInterval(distance / Constants.UI.marqueeSpeedPointsPerSecond))
+        let duration = TimeInterval(distance / Constants.UI.marqueeSpeedPointsPerSecond)
 
         layer.removeAllAnimations()
 
@@ -91,7 +90,7 @@ final class MarqueeView: NSView {
         animation.toValue = -distance
         animation.duration = duration
         animation.timingFunction = CAMediaTimingFunction(name: .linear)
-        animation.fillMode = .both
+        animation.fillMode = .forwards
         animation.isRemovedOnCompletion = false
         layer.add(animation, forKey: Constants.Animation.marqueeKey)
 
@@ -112,16 +111,6 @@ final class MarqueeView: NSView {
     override func layout() {
         super.layout()
         let height = bounds.height
-        label.frame.origin.y = max(0, (height - label.intrinsicContentSize.height) / 2)
-    }
-
-    private func measureTextWidth(_ text: String, font: NSFont) -> CGFloat {
-        let attributes: [NSAttributedString.Key: Any] = [.font: font]
-        let attributedString = NSAttributedString(string: text, attributes: attributes)
-        let size = attributedString.boundingRect(
-            with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude),
-            options: [.usesLineFragmentOrigin, .usesFontLeading]
-        ).size
-        return ceil(size.width)
+        label.frame.origin.y = max(0, (height - label.frame.height) / 2)
     }
 }

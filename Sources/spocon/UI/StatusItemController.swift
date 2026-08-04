@@ -107,10 +107,12 @@ final class StatusItemController: NSObject {
         )
         statusItem?.length = desiredWidth
 
+        let itemHeight = NSStatusBar.system.thickness
+
         if let existingView = marqueeView {
-            existingView.frame = NSRect(x: 0, y: 0, width: desiredWidth, height: button.bounds.height)
+            existingView.frame = NSRect(x: 0, y: 0, width: desiredWidth, height: itemHeight)
         } else {
-            let view = MarqueeView(frame: NSRect(x: 0, y: 0, width: desiredWidth, height: button.bounds.height))
+            let view = MarqueeView(frame: NSRect(x: 0, y: 0, width: desiredWidth, height: itemHeight))
             view.autoresizingMask = [.height]
             button.addSubview(view)
             marqueeView = view
