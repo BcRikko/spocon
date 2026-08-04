@@ -2,13 +2,13 @@
 
 Made with AI.
 
-このアプリケーションは、Spotifyアプリで再生中の「曲名」と「アーティスト名」をmacOSのメニューバー（タスクトレイ）に表示します。内部では `osascript`（AppleScript）でSpotifyから情報を取得し、再生中の曲情報を定期ポーリングして表示します。
+このアプリケーションは、Spotifyアプリで再生中の「曲名」と「アーティスト名」をmacOSのメニューバー（タスクトレイ）に表示します。内部では `osascript`（AppleScript）でSpotifyから情報を取得し、再生中の曲情報を表示します。Spotifyが配信する `com.spotify.client.PlaybackStateChanged` 通知を利用してリアルタイムに更新し、5秒おきのポーリングをフォールバックとしています。
 
 Small macOS status-bar (menu bar) app implemented as a Swift Package (AppKit).
 
 **Requirements:**
-- macOS 11+ for local build compatibility (intended runtime: macOS 15+)
-- Swift toolchain compatible with SwiftPM (local builds use macOS 11 target in Package.swift)
+- macOS 15+
+- Swift 6 toolchain (SwiftPM)
 
 **Quick build & run (debug)**
 ```bash
@@ -16,50 +16,46 @@ swift build
 swift run
 ```
 
-**Create release .app bundle (manual, minimal steps)**
-1. Build release binary:
+**Run tests**
 ```bash
-swift build -c release
+swift test
 ```
-2. Create bundle structure and Info.plist (example; repository creates a basic plist during packaging):
+
+**Create release .app bundle**
 ```bash
-mkdir -p .build/Release/spocon.app/Contents/MacOS
-cp .build/arm64-apple-macosx/release/spocon .build/Release/spocon.app/Contents/MacOS/spocon
+./Scripts/build_app.sh
 ```
-3. Ensure executable flag and ad-hoc codesign (for testing/distribution before proper signing):
-```bash
-chmod +x .build/Release/spocon.app/Contents/MacOS/spocon
-codesign --force --sign - .build/Release/spocon.app
-```
-4. Zip for distribution:
-```bash
-zip -r spocon-macos.zip .build/Release/spocon.app
-```
+
+This produces `.build/Release/spocon.app`. The script performs a release build, assembles the bundle, copies the included `Info.plist` and entitlements, and ad-hoc signs the app.
 
 **Packaging & distribution notes**
-- For public distribution you should sign with a Developer ID certificate and submit for notarization via Apple. Notarization requires an Apple Developer account and `altool` / `notarytool` usage.
-- Entitlements: if you access protected APIs (e.g., AppleScript control of other apps), you may need to request appropriate entitlements and inform users about Accessibility / Automation permissions.
-- The repository currently uses a simple AppleScript call (osascript) to poll Spotify. At runtime macOS may request Automation/Accessibility permission for `osascript`.
+- For public distribution you should sign with a Developer ID certificate and submit for notarization via Apple. Notarization requires an Apple Developer account and `notarytool`.
+- Entitlements: the included `Packaging/spocon.entitlements` requests `com.apple.security.automation.apple-events` so the app can control/read Spotify via AppleScript.
+- `Info.plist` sets `LSUIElement` to `true` so the app runs as a menu-bar-only (agent) app, and includes `NSAppleEventsUsageDescription` to explain the AppleScript usage to users.
+- At runtime macOS may request Automation permission for `spocon` / `osascript`.
 
 **Code / structure**
-- Package: `Package.swift` (package and executable named `spocon`)
-- Sources: `Sources/spocon/` (contains `main.swift`, `StatusItemController.swift`, `MarqueeView.swift`)
-- App bundle example output: `.build/Release/spocon.app`
+- `Package.swift` — package and executable named `spocon`, Swift 6 language mode
+- `Sources/spocon/`
+  - `App/` — `@main` entry point and `AppDelegate`
+  - `Models/` — `NowPlaying`
+  - `Services/` — `SpotifyClient`, `SpotifyStateParser`, `SpotifyPlaybackObserver`
+  - `UI/` — `StatusItemController`, `MarqueeView`
+  - `Utilities/` — `Constants`, `Logger`
+- `Tests/spoconTests/` — unit tests for parsing and model logic
+- `Packaging/` — `Info.plist` and entitlements template
+- `Scripts/build_app.sh` — release .app bundle builder
 
 **Runtime behavior**
 - Menu-bar text shows now-playing as: `♪ {title} / {artist}`
-- If text exceeds max width, a smooth marquee scroll is used (Core Animation). Default max width is set inside `StatusItemController`.
-- Spotify polling: implemented via `osascript` (AppleScript) executed periodically; adjust polling interval in `StatusItemController.startSpotifyUpdates(interval:)`.
+- If text exceeds max width, a smooth marquee scroll is used (Core Animation). Default max width is defined in `Constants.UI.statusItemMaxWidth`.
+- Spotify updates: listens to Spotify's distributed notification for state changes and refreshes every 5 seconds as a fallback.
 
 **Troubleshooting**
-- If build fails due to package description / platform mismatch, update your Xcode / Swift toolchain or adjust `platforms` in `Package.swift` to a compatible macOS version.
-- If AppleScript returns empty or permissions errors, open System Settings → Privacy & Security → Automation/Accessibility and allow the required automation for Terminal / `osascript`.
+- If AppleScript returns empty or permissions errors, open System Settings → Privacy & Security → Automation and allow `spocon` / `osascript` to control Spotify.
 
 **Next steps for distribution**
-- Create an Xcode project or use `xcodebuild` to create an Xcode archive for proper code signing.
-- Sign with Developer ID and notarize before public distribution.
-
-**License**
+- Sign with a Developer ID certificate and notarize before public distribution.
 - Add a license file if you intend to publish.
 
 See source files in `Sources/spocon/` for implementation details.

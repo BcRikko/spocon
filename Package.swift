@@ -1,13 +1,10 @@
-// swift-tools-version:5.5
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "spocon",
-    // 注意: 実行環境の SwiftPM によっては `.v14`/`.v15` が使えないため
-    //       ローカルビルド互換性のため一時的に `.v11` を指定しています。
-    //       意図する実行ターゲットは macOS Sequoia (v15) です。
     platforms: [
-        .macOS(.v11)
+        .macOS(.v15)
     ],
     products: [
         .executable(name: "spocon", targets: ["spocon"]),
@@ -15,7 +12,18 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "spocon",
-            path: "Sources/spocon"
+            path: "Sources/spocon",
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
+            ]
+        ),
+        .testTarget(
+            name: "spoconTests",
+            dependencies: ["spocon"],
+            path: "Tests/spoconTests",
+            swiftSettings: [
+                .swiftLanguageMode(.v6)
+            ]
         )
     ]
 )
